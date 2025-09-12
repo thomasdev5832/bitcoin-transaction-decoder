@@ -1,6 +1,31 @@
 use std::io::Read;
 
 #[allow(unused)]
+fn read_compact_size(transaction_bytes: &mut &[u8]) -> u64 {
+    let mut compact_size = [0_u8; 1];
+    transaction_bytes.read(&mut compact_size).unwrap();
+
+    match compact_size[0] {
+        0..=252 => compact_size[0] as u64,
+        253 => {
+            let mut buffer = [0; 2];
+            transaction_bytes.read(&mut buffer).unwrap();
+            u16::from_le_bytes(buffer) as u64
+        }
+        254 => {
+            let mut buffer = [0; 4];
+            transaction_bytes.read(&mut buffer).unwrap();
+            u32::from_le_bytes(buffer) as u64
+        }
+        255 => {
+            let mut buffer = [0; 8];
+            transaction_bytes.read(&mut buffer).unwrap();
+            u64::from_le_bytes(buffer)
+        }
+    }
+}
+
+#[allow(unused)]
 fn read_version(transaction_bytes: &mut &[u8]) -> u32 {
     let mut buffer = [0; 4];
     transaction_bytes.read(&mut buffer).unwrap();
@@ -12,5 +37,7 @@ fn main() {
     let transaction_bytes = hex::decode(transaction_hex).unwrap();
     let mut bytes_slice = transaction_bytes.as_slice();
     let version = read_version(&mut bytes_slice);
+    let input_length = read_compact_size(&mut bytes_slice);
     println!("version: {}", version);
+    println!("input length: {}", input_length);
 }
