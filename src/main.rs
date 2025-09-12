@@ -1,8 +1,14 @@
+use std::io::Read;
+
 #[allow(unused)]
 fn read_version(_transaction_hex: &str) -> u32 {
     let transaction_bytes = hex::decode(_transaction_hex).unwrap();
-    let version_bytes: [u8; 4] = (&transaction_bytes[0..4]).try_into().unwrap();
-    u32::from_le_bytes(version_bytes)
+
+    let mut bytes_slice = transaction_bytes.as_slice();
+    let mut buffer = [0; 4];
+    bytes_slice.read(&mut buffer).unwrap();
+
+    u32::from_le_bytes(buffer)
 }
 
 fn main() {
