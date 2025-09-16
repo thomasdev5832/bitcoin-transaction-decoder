@@ -1,4 +1,20 @@
+use core::fmt;
+use serde::{Deserialize, Serialize};
 use std::io::Read;
+
+#[derive(Debug, Serialize, Deserialize)]
+struct Input {
+    txid: String,
+    output_index: u32,
+    script_sig: String,
+    sequence: u32,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+struct Transaction {
+    version: u32,
+    inputs: Vec<Input>,
+}
 
 #[allow(unused)]
 fn read_compact_size(transaction_bytes: &mut &[u8]) -> u64 {
@@ -31,18 +47,18 @@ fn read_u32(transaction_bytes: &mut &[u8]) -> u32 {
     u32::from_le_bytes(buffer)
 }
 
-fn read_txtid(transaction_bytes: &mut &[u8]) -> [u8; 32] {
+fn read_txtid(transaction_bytes: &mut &[u8]) -> String {
     let mut buffer = [0; 32];
     transaction_bytes.read(&mut buffer).unwrap();
     buffer.reverse();
-    buffer
+    hex::encode(buffer)
 }
 
-fn read_script(transaction_bytes: &mut &[u8]) -> Vec<u8> {
+fn read_script(transaction_bytes: &mut &[u8]) -> String {
     let script_size = read_compact_size(transaction_bytes) as usize;
     let mut buffer = vec![0_u8; script_size];
     transaction_bytes.read(&mut buffer).unwrap();
-    buffer
+    hex::encode(buffer)
 }
 
 fn main() {
@@ -50,17 +66,27 @@ fn main() {
     let transaction_bytes = hex::decode(transaction_hex).unwrap();
     let mut bytes_slice = transaction_bytes.as_slice();
     let version = read_u32(&mut bytes_slice);
-    let input_length = read_compact_size(&mut bytes_slice);
+    let input_count = read_compact_size(&mut bytes_slice);
+    let mut inputs = vec![];
 
     for _ in 0..input_count {
         let txid = read_txtid(&mut bytes_slice);
         let output_index = read_u32(&mut bytes_slice);
         let script_sig = read_script(&mut bytes_slice);
         let sequence = read_u32(&mut bytes_slice);
-    }
 
-    println!("version: {}", version);
-    println!("input length: {}", input_length);
+        inputs.push(Input {
+            txid,
+            output_index,
+            script_sig,
+            sequence,
+        });
+    }
+    let transaction = Transaction { version, inputs };
+    println!(
+        "transaction: {}",
+        serde_json::to_string_pretty(&transaction).unwrap()
+    );
 }
 
 #[cfg(test)]
