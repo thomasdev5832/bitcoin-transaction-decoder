@@ -1,7 +1,8 @@
 use serde::Serializer;
 use std::io::Read;
-use transaction::{Amount, BitcoinValue, Input, Output, Transaction};
+use transaction::{Amount, BitcoinValue, Input, Output, Transaction, Txid};
 mod transaction;
+use sha2::{Digest, Sha256};
 
 fn as_btc<S: Serializer, T: BitcoinValue>(t: &T, s: S) -> Result<S::Ok, S::Error> {
     let btc = t.to_btc();
@@ -45,11 +46,10 @@ fn read_amount(transaction_bytes: &mut &[u8]) -> Amount {
     Amount::from_sat(u64::from_le_bytes(buffer))
 }
 
-fn read_txtid(transaction_bytes: &mut &[u8]) -> String {
+fn read_txid(transaction_bytes: &mut &[u8]) -> Txid {
     let mut buffer = [0; 32];
     transaction_bytes.read(&mut buffer).unwrap();
-    buffer.reverse();
-    hex::encode(buffer)
+    Txid::from_bytes(buffer)
 }
 
 fn read_script(transaction_bytes: &mut &[u8]) -> String {
@@ -57,6 +57,17 @@ fn read_script(transaction_bytes: &mut &[u8]) -> String {
     let mut buffer = vec![0_u8; script_size];
     transaction_bytes.read(&mut buffer).unwrap();
     hex::encode(buffer)
+}
+
+fn hash_raw_transaction(raw_transaction: &[u8]) -> Txid {
+    let mut hasher = Sha256::new();
+    hasher.update(&raw_transaction);
+    let hash1 = hasher.finalize();
+
+    let mut hasher = Sha256::new();
+    hasher.update(&hash1);
+    let hash2 = hasher.finalize();
+    Txid::from_bytes(hash2.into())
 }
 
 fn main() {
@@ -68,7 +79,7 @@ fn main() {
     let mut inputs = vec![];
 
     for _ in 0..input_count {
-        let txid = read_txtid(&mut bytes_slice);
+        let txid = read_txid(&mut bytes_slice);
         let output_index = read_u32(&mut bytes_slice);
         let script_sig = read_script(&mut bytes_slice);
         let sequence = read_u32(&mut bytes_slice);
@@ -94,10 +105,15 @@ fn main() {
         });
     }
 
+    let lock_time = read_u32(&mut bytes_slice);
+    let transaction_id = hash_raw_transaction(&transaction_bytes);
+
     let transaction = Transaction {
+        transaction_id,
         version,
         inputs,
         outputs,
+        lock_time,
     };
     println!(
         "transaction: {}",
